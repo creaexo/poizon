@@ -113,34 +113,29 @@ def start(category_id: int, category_name: str, base_dir: Path = test_dir):
         for size, sku in sizes_sku:
             str_ = r'\"skuId\":' + str(sku) + r',\"price\":{},'
             price: str = us.search(str_).fixed[0]
-            if price.isdigit():
+            if size.isdigit():
                 ordinary_info.append((sku, size, price))
             else:
                 f_size_info.append((sku, size, price))
         xml_filename = ''
+        ordinary_info.sort(key=lambda a: int(a[2]))
+        f_size_info.sort(key=lambda b: int(b[2]))
         if len(f_size_info):
             first_sku_f = f_size_info[0][0]
-            min_price_f = min([row[2] for row in f_size_info])
             xml_filename = base_dir / 'xml' / category_name / f'{first_sku_f}.xml'
         if len(ordinary_info):
             first_sku_o = ordinary_info[0][0]
-            min_price_o = min([row[2] for row in ordinary_info])
             xml_filename = base_dir / 'xml' / category_name / f'{first_sku_o}.xml'
-
 
         try:
             xml_filename.parent.mkdir(exist_ok=True)
             with open(xml_filename, 'w', encoding='utf-8') as file:
                 for sku, size, price in ordinary_info:
-                    available = ''
                     try:
-                        if int(price) == min_price_o:
-                            min_price_o = None
-                            available = ' available="true"'
                         if sku == first_sku_o:
-                            file.write(f'<offer id="{sku}-0"{available} group_id="{first_sku_o}">')
+                            file.write(f'<offer id="{sku}-0" available="true" group_id="{first_sku_o}">')
                         else:
-                            file.write(f'<offer id="{first_sku_o}-{sku}"{available} group_id="{first_sku_o}">')
+                            file.write(f'<offer id="{first_sku_o}-{sku}" group_id="{first_sku_o}">')
                         file.write(f'<categoryId>{category_id}</categoryId>')
                         file.write(f'<price>{int(int(price)*0.9)}</price>')
                         file.write('<currencyId>RUB</currencyId>')
@@ -154,18 +149,12 @@ def start(category_id: int, category_name: str, base_dir: Path = test_dir):
                         print(sku, size, price)
                     finally:
                         file.write(f'</offer>')
-                available = ''
                 for sku, size, price in f_size_info:
                     try:
-                        if int(price) == min_price_f:
-                            min_price_f = None
-                            available = ' available="true"'
                         if sku == first_sku_f:
-                            file.write(
-                                f'<offer id="{sku}-0"{available} group_id="{first_sku_f}">')
+                            file.write(f'<offer id="{sku}-0" available="true" group_id="{first_sku_f}">')
                         else:
-                            file.write(
-                                f'<offer id="{first_sku_f}-{sku}"{available} group_id="{first_sku_f}">')
+                            file.write(f'<offer id="{first_sku_f}-{sku}" group_id="{first_sku_f}">')
                         file.write(f'<categoryId>{category_id}</categoryId>')
                         file.write(f'<price>{int(int(price) * 0.9)}</price>')
                         file.write('<currencyId>RUB</currencyId>')
@@ -184,7 +173,7 @@ def start(category_id: int, category_name: str, base_dir: Path = test_dir):
             print(f'Не удалось записать файл: {xml_filename}')
 
 # products_form_categories(
-#     base_dir=test_dir, category=ADIDAS_NAME, link=ADIDAS_LINK, s_page=2, e_page=3
+#     base_dir=test_dir, category=ADIDAS_NAME, link=ADIDAS_LINK, s_page=4, e_page=7
 # )
 start(ADIDAS_ID, ADIDAS_NAME)
 xml_creator(base_dir=test_dir, category_name=ADIDAS_NAME, category_id=ADIDAS_ID)
