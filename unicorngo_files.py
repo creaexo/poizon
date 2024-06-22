@@ -11,13 +11,15 @@ footer = '</offers></shop></yml_catalog>'
 unicorngo_html_dir = Path('unicorngo/html')
 test_html_dir = Path('test/html')
 test_dir = Path('test/')
-ADIDAS = 6
+ADIDAS_ID = 6
+ADIDAS_NAME = 'ADIDAS'
+ADIDAS_LINK = 'https://unicorngo.ru/men/footwear/sneakers?brands=adidas'
 NEW_BALANCE_ID = 2
 NEW_BALANCE_NAME = 'NEW_BALANCE'
 NEW_BALANCE_LINK = 'https://unicorngo.ru/men/footwear/sneakers?brands=New%20Balance'
 
-def products_form_categories(base_dir: Path, category: str, link: str):
-    for pi in range(1, 2):
+def products_form_categories(base_dir: Path, category: str, link: str, s_page: int=1, e_page: int=1):
+    for pi in range(s_page, e_page + 1):
         session = HTMLSession()
         r = session.get(f'{link}&page={pi}&sort=by-relevance')
         r.html.render()
@@ -33,7 +35,7 @@ def products_form_categories(base_dir: Path, category: str, link: str):
 
         for i in all_products:
             url: str = i.absolute_links.pop()
-            print(url)
+            # print(url)
             product_session = HTMLSession()
             try:
                 p = product_session.get(url)
@@ -43,7 +45,8 @@ def products_form_categories(base_dir: Path, category: str, link: str):
                 continue
             count += 1
             txt = p.text
-            file_name = f'{base_dir}/html/{category}/{url.split("/")[-1].split("?")[0]}.html'
+            file_name = base_dir / f'html/{category}/{url.split("/")[-1].split("?")[0]}.html'
+            file_name.parent.mkdir(exist_ok=True)
             with open(file_name, 'w', encoding='utf-8') as base_file:
                 base_file.write(txt)
 
@@ -56,52 +59,38 @@ def html_checker(html_dir: Path):
         yield res
 
 
-def xml_creator(base_dir: Path, category_name: str):
+def xml_creator(base_dir: Path, category_name: str, category_id: int):
+    header = f'<?xml version="1.0" encoding="utf-8"?><yml_catalog date="2021-04-01 12:20"><shop><offers><categories><category id="{category_id}">{category_name}</category></categories>'
+    footer = '</offers></shop></yml_catalog>'
     dt_start = str(datetime.now()).replace(':', '_')
-    result_filename = base_dir / f'results/{category_name}/{dt_start}.xml'
+    result_filename = base_dir / 'results' / category_name / f'{dt_start}.xml'
+    result_filename.parent.mkdir(exist_ok=True)
     with open(result_filename, 'w', encoding='utf-8') as xml_file:
         xml_file.write(header)
     for file in (base_dir / 'xml' / category_name).glob('*'):
-        # print('=================')
-        # print(file)
         file.parent.mkdir(exist_ok=True)
         with open(file.as_posix(), 'r', encoding='utf-8') as file_:
              res = file_.read()
-        print(res)
+        # print(res)
         with open(result_filename, 'a+', encoding='utf-8') as xml_file:
             xml_file.write(res)
     with open(result_filename, 'a+', encoding='utf-8') as xml_file:
-        xml_file.write(header)
+        xml_file.write(footer)
 
 
 def start(category_id: int, category_name: str, base_dir: Path = test_dir):
     dt_start = str(datetime.now()).replace(':', '_')
-    result_filename = base_dir / f'results/{category_name}/{dt_start}.xml'
-    # result_filename.parent.mkdir(exist_ok=True)
-    # with open(result_filename, 'w', encoding='utf-8') as xml_file:
-    #     xml_file.write(header)
     for page in html_checker(base_dir / 'html' / category_name):
         p = HTML(html=page, url='https://unicorngo.ru')
         name = p.find('h1', first=True).text
-        products_images = []
         description_end = p.search('product-description_content__{}"')
         if description_end:
             description = p.find(f'.product-description_content__{description_end[0]}', first=True).text
             description = re.sub(' +', ' ', description)
         else:
             description = 'Скоро здесь появится описание'
-        products_images = [f'<picture>{o.attrs.get("content").replace("/origin-img/", "/cut-img/")}</picture>' for o in p.find('meta[property="og:image"]', clean=True)[::-1]]
-        # print(type(p.find('meta[property="og:image"]', clean=True)[::-1]))
-        # for o in :
-        #     img =
-        #     # print(type(img))
-        #     # if len(products_images) == 5 or img == '/android-chrome-192x192.webp':
-        #     #     break
-        #     # if cimg != '/android-chrome-192x192.webp':
-        #     products_images.append(
-        #         f'<picture>{img.replace("/origin-img/", "/cut-img/")}</picture>')
+        products_images = [f'<picture>{o.attrs.get("content").replace("/origin-img/", "/cut-img/")}</picture>' for o in p.find('meta[property="og:image"]', clean=True)[::-1][:5] if o.attrs.get("content") != '/android-chrome-192x192.webp']
         # print(products_images)
-        # print('<picture>/android-chrome-192x192.webp</picture>' in images)
         class_end = p.search('product-size_list__{}"')[0]
         sizes = p.find(f'.product-size_list__{class_end}', first=True)
 
@@ -119,29 +108,45 @@ def start(category_id: int, category_name: str, base_dir: Path = test_dir):
                 break
 
         us = HTML(html=useful_script)
-        all_info = []
+        ordinary_info = []
+        f_size_info = []
         for size, sku in sizes_sku:
             str_ = r'\"skuId\":' + str(sku) + r',\"price\":{},'
-            all_info.append((sku, size, us.search(str_).fixed[0]))
-        first_sku = all_info[0][0]
-        # with open(f'{base_dir}/xml/{first_sku}.xml', 'w', encoding='utf-8') as empty_file:
-        #     empty_file.write('')
-        xml_filename = base_dir / 'xml' / category_name / f'{first_sku}.xml'
-        try:
-            # xml_filename.touch()
-            with open(xml_filename, 'r+', encoding='utf-8') as file:
-                for sku, size, price in all_info:
+            price: str = us.search(str_).fixed[0]
+            if price.isdigit():
+                ordinary_info.append((sku, size, price))
+            else:
+                f_size_info.append((sku, size, price))
+        xml_filename = ''
+        if len(f_size_info):
+            first_sku_f = f_size_info[0][0]
+            min_price_f = min([row[2] for row in f_size_info])
+            xml_filename = base_dir / 'xml' / category_name / f'{first_sku_f}.xml'
+        if len(ordinary_info):
+            first_sku_o = ordinary_info[0][0]
+            min_price_o = min([row[2] for row in ordinary_info])
+            xml_filename = base_dir / 'xml' / category_name / f'{first_sku_o}.xml'
 
+
+        try:
+            xml_filename.parent.mkdir(exist_ok=True)
+            with open(xml_filename, 'w', encoding='utf-8') as file:
+                for sku, size, price in ordinary_info:
+                    available = ''
                     try:
-                        if sku == first_sku:
-                            file.write(f'<offer id="{sku}-0" available="true" group_id="{first_sku}">')
+                        if int(price) == min_price_o:
+                            min_price_o = None
+                            available = ' available="true"'
+                        if sku == first_sku_o:
+                            file.write(f'<offer id="{sku}-0"{available} group_id="{first_sku_o}">')
                         else:
-                            file.write(f'<offer id="{first_sku}-{sku}" group_id="{first_sku}">')
+                            file.write(f'<offer id="{first_sku_o}-{sku}"{available} group_id="{first_sku_o}">')
                         file.write(f'<categoryId>{category_id}</categoryId>')
                         file.write(f'<price>{int(int(price)*0.9)}</price>')
                         file.write('<currencyId>RUB</currencyId>')
                         file.write(f'<name>{name}</name>')
                         file.write(f'<description>{description}</description>')
+
                         file.write(f'<param name="Размер">{size}</param>')
                         for img_ in products_images:
                             file.write(img_)
@@ -149,32 +154,37 @@ def start(category_id: int, category_name: str, base_dir: Path = test_dir):
                         print(sku, size, price)
                     finally:
                         file.write(f'</offer>')
-                # content = file.read()
-                # with open(f'{base_dir}/xml/{category_name}/{first_sku}.xml', 'r', encoding='utf-8') as file_r:
-                #     try:
-                #         content = file_r.read()
-                #         # print(products_images)
-                #     except Exception as e:
-                #         print(e)
-                #         print(sku, size, price)
-                #         print(products_images)
-                #         print(f'Ошибка записи файла: {name}')
-                # with open(result_filename, 'a', encoding='utf-8') as xml_file:
-                #     xml_file.write(content)
-                # print(f'{name} готово')
+                available = ''
+                for sku, size, price in f_size_info:
+                    try:
+                        if int(price) == min_price_f:
+                            min_price_f = None
+                            available = ' available="true"'
+                        if sku == first_sku_f:
+                            file.write(
+                                f'<offer id="{sku}-0"{available} group_id="{first_sku_f}">')
+                        else:
+                            file.write(
+                                f'<offer id="{first_sku_f}-{sku}"{available} group_id="{first_sku_f}">')
+                        file.write(f'<categoryId>{category_id}</categoryId>')
+                        file.write(f'<price>{int(int(price) * 0.9)}</price>')
+                        file.write('<currencyId>RUB</currencyId>')
+                        file.write(f'<name>{name}</name>')
+                        file.write(f'<description>{description}</description>')
+
+                        file.write(f'<param name="Размер (дробный)">{size}</param>')
+                        for img_ in products_images:
+                            file.write(img_)
+                    except Exception:
+                        print(sku, size, price)
+                    finally:
+                        file.write(f'</offer>')
         except Exception as e:
             print(e)
-            print(f'Не удалось записать файл: {first_sku}')
-# print(f'страница {pi}')
+            print(f'Не удалось записать файл: {xml_filename}')
 
-    # with open(result_filename, 'a', encoding='utf-8') as xml_file:
-    #     xml_file.write(footer)
-
-# print('Работа скрипта:')
-# print(datetime.now()-start_time)
-# products_form_categories(test_dir, 'NEW_BALANCE', NEW_BALANCE_LINK)
-start(NEW_BALANCE_ID, NEW_BALANCE_NAME)
-xml_creator(base_dir=test_dir, category_name=NEW_BALANCE_NAME)
-t = 9*9**9
-# print(type(next(html_checker(Path('test/html/NEW_BALANCE/')))))
-# with open(f'all_goods2/{first_sku}.xml', 'w', encoding='utf-8') as file:
+# products_form_categories(
+#     base_dir=test_dir, category=ADIDAS_NAME, link=ADIDAS_LINK, s_page=2, e_page=3
+# )
+start(ADIDAS_ID, ADIDAS_NAME)
+xml_creator(base_dir=test_dir, category_name=ADIDAS_NAME, category_id=ADIDAS_ID)
