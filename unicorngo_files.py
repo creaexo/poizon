@@ -9,23 +9,32 @@ start_time = datetime.now()
 header = '<?xml version="1.0" encoding="utf-8"?><yml_catalog date="2021-04-01 12:20"><shop><offers><categories><category id="2">New Balance</category></categories>'
 footer = '</offers></shop></yml_catalog>'
 unicorngo_html_dir = Path('unicorngo/html')
-test_html_dir = Path('test/html')
-test_dir = Path('test/')
+test_html_dir = Path.home() / 'poizon' / Path('test/html')
+test_dir = Path.home() / 'poizon' / Path('test/html')
+
 ADIDAS_ID = 6
 ADIDAS_NAME = 'ADIDAS'
-ADIDAS_LINK = 'https://unicorngo.ru/men/footwear/sneakers?brands=adidas'
+ADIDAS_LINK = 'https://unicorngo.ru/men/footwear/sneakers?brands=adidas&'
+
+JORDAN_ID = 8
+JORDAN_NAME = 'JORDAN'
+JORDAN_LINK = 'https://unicorngo.ru/sneakers/airjordan?'
+
 NEW_BALANCE_ID = 2
 NEW_BALANCE_NAME = 'NEW_BALANCE'
-NEW_BALANCE_LINK = 'https://unicorngo.ru/men/footwear/sneakers?brands=New%20Balance'
+NEW_BALANCE_LINK = 'https://unicorngo.ru/men/footwear/sneakers?brands=New%20Balance&'
 
 def products_form_categories(base_dir: Path, category: str, link: str, s_page: int=1, e_page: int=1):
+    base_dir.mkdir(exist_ok=True, parents=True)
     for pi in range(s_page, e_page + 1):
         session = HTMLSession()
-        r = session.get(f'{link}&page={pi}&sort=by-relevance')
+        r = session.get(f'{link}page={pi}&sort=by-relevance')
         r.html.render()
-        with open(f'{base_dir}/cat/{category}{pi}.html', 'w', encoding='utf-8') as cat_file:
+        cat_dir = base_dir / 'cat'
+        cat_dir.mkdir(exist_ok=True, parents=True)
+        with open(cat_dir / f'{category}{pi}.html', 'w', encoding='utf-8') as cat_file:
             cat_file.write(r.text)
-        with open(f'{base_dir}/cat/{category}{pi}.html', 'r', encoding='utf-8') as cat_file:
+        with open(cat_dir / f'{category}{pi}.html', 'r', encoding='utf-8') as cat_file:
             page = cat_file.read()
         r = HTML(html=page, url='https://unicorngo.ru')
         class_end = r.search('product-card_product_card__{} ')[0]
@@ -46,7 +55,7 @@ def products_form_categories(base_dir: Path, category: str, link: str, s_page: i
             count += 1
             txt = p.text
             file_name = base_dir / f'html/{category}/{url.split("/")[-1].split("?")[0]}.html'
-            file_name.parent.mkdir(exist_ok=True)
+            file_name.parent.mkdir(exist_ok=True, parents=True)
             with open(file_name, 'w', encoding='utf-8') as base_file:
                 base_file.write(txt)
 
@@ -64,11 +73,11 @@ def xml_creator(base_dir: Path, category_name: str, category_id: int):
     footer = '</offers></shop></yml_catalog>'
     dt_start = str(datetime.now()).replace(':', '_')
     result_filename = base_dir / 'results' / category_name / f'{dt_start}.xml'
-    result_filename.parent.mkdir(exist_ok=True)
+    result_filename.parent.mkdir(exist_ok=True, parents=True)
     with open(result_filename, 'w', encoding='utf-8') as xml_file:
         xml_file.write(header)
     for file in (base_dir / 'xml' / category_name).glob('*'):
-        file.parent.mkdir(exist_ok=True)
+        file.parent.mkdir(exist_ok=True, parents=True)
         with open(file.as_posix(), 'r', encoding='utf-8') as file_:
              res = file_.read()
         # print(res)
@@ -80,7 +89,9 @@ def xml_creator(base_dir: Path, category_name: str, category_id: int):
 
 def start(category_id: int, category_name: str, base_dir: Path = test_dir):
     dt_start = str(datetime.now()).replace(':', '_')
-    for page in html_checker(base_dir / 'html' / category_name):
+    cat_workdir = base_dir / 'html' / category_name
+    cat_workdir.mkdir(exist_ok=True, parents=True)
+    for page in html_checker(cat_workdir):
         p = HTML(html=page, url='https://unicorngo.ru')
         name = p.find('h1', first=True).text
         description_end = p.search('product-description_content__{}"')
@@ -128,7 +139,7 @@ def start(category_id: int, category_name: str, base_dir: Path = test_dir):
             xml_filename = base_dir / 'xml' / category_name / f'{first_sku_o}.xml'
 
         try:
-            xml_filename.parent.mkdir(exist_ok=True)
+            xml_filename.parent.mkdir(exist_ok=True, parents=True)
             with open(xml_filename, 'w', encoding='utf-8') as file:
                 for sku, size, price in ordinary_info:
                     try:
